@@ -1,0 +1,8 @@
+# 真实配置（含密钥），仅存在于部署机器上
+config.json
+state.json
+*.key
+
+# 构建产物
+aliyun-cdt-keepalive
+aliyun-cdt-keepalive.exe

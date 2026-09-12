@@ -1,0 +1,13 @@
+{
+  "feishu_webhook": "https://open.feishu.cn/open-apis/bot/v2/hook/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  "instances": [
+    {
+      "name": "HK-01",
+      "region": "cn-hongkong",
+      "instance_id": "i-xxxxxxxxxxxxxxxx",
+      "ak": "LTAI5t你的AccessKeyId",
+      "sk": "你的AccessKeySecret",
+      "traffic_limit_gb": 180
+    }
+  ]
+}

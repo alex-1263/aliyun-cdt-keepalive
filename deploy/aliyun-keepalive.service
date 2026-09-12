@@ -1,0 +1,11 @@
+[Unit]
+Description=Aliyun CDT Keepalive Monitor (traffic guard)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/aliyun-keepalive/aliyun-cdt-keepalive -config /opt/aliyun-keepalive/config.json -state /opt/aliyun-keepalive/state.json
+
+[Install]
+WantedBy=multi-user.target

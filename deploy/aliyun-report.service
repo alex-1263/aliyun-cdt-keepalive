@@ -1,0 +1,7 @@
+[Unit]
+Description=Aliyun CDT Keepalive Daily Report
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/aliyun-keepalive/aliyun-cdt-keepalive -config /opt/aliyun-keepalive/config.json -state /opt/aliyun-keepalive/state.json -report
