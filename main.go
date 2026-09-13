@@ -40,6 +40,8 @@ type Config struct {
 
 type InstState struct {
 	OverLimitStopped bool `json:"over_limit_stopped"`
+	StartFailStreak  int  `json:"start_fail_streak,omitempty"`
+	StartFailAlerted bool `json:"start_fail_alerted,omitempty"`
 }
 
 type State struct {
@@ -291,10 +293,12 @@ func processInstance(inst Instance) {
 		log.Printf("[%s] 流量已重置（%.2fGB），自动开机恢复", icfg.Name, gb)
 		if !dryRun {
 			if err := setInstancePower(icfg.AK, icfg.SK, icfg.Region, icfg.InstanceID, true); err != nil {
-				log.Printf("[%s] 开机失败: %v", icfg.Name, err)
+				noteStartFailure(icfg, &st, err)
 				return
 			}
 		}
+		st.StartFailStreak = 0
+		st.StartFailAlerted = false
 		st.OverLimitStopped = false
 		state.Instances[icfg.InstanceID] = st
 		feishuPush(fmt.Sprintf("✅ [%s] 月度CDT流量已重置（当前 %.2fGB），实例已自动开机恢复。", icfg.Name, gb))
@@ -303,18 +307,35 @@ func processInstance(inst Instance) {
 		log.Printf("[%s] 检测到非预期停机，执行保活开机", icfg.Name)
 		if !dryRun {
 			if err := setInstancePower(icfg.AK, icfg.SK, icfg.Region, icfg.InstanceID, true); err != nil {
-				log.Printf("[%s] 开机失败: %v", icfg.Name, err)
+				noteStartFailure(icfg, &st, err)
 				return
 			}
 		}
+		st.StartFailStreak = 0
+		st.StartFailAlerted = false
+		state.Instances[icfg.InstanceID] = st
 		feishuPush(fmt.Sprintf("🔄 [%s] 检测到实例被停止（疑似抢占回收），已自动开机保活。", icfg.Name))
 
 	default:
-		if st.OverLimitStopped {
+		if st.OverLimitStopped || st.StartFailStreak > 0 || st.StartFailAlerted {
 			st.OverLimitStopped = false
+			st.StartFailStreak = 0
+			st.StartFailAlerted = false
 			state.Instances[icfg.InstanceID] = st
 		}
 		log.Printf("[%s] 状态正常", icfg.Name)
+	}
+}
+
+// noteStartFailure 开机失败连击计数：连续3次（约15分钟）推飞书告警。节省停机状态下 EIP 配置费持续计费，需人工关注。
+func noteStartFailure(icfg Instance, st *InstState, err error) {
+	st.StartFailStreak++
+	state.Instances[icfg.InstanceID] = *st
+	log.Printf("[%s] 开机失败: %v", icfg.Name, err)
+	if st.StartFailStreak >= 3 && !st.StartFailAlerted {
+		feishuPush(fmt.Sprintf("⚠️ [%s] 开机已连续失败 %d 次（约 %d 分钟），实例仍处于节省停机状态，EIP 配置费(约0.4元/时)持续计费。请检查抢占库存/出价上限。最近错误: %v", icfg.Name, st.StartFailStreak, st.StartFailStreak*5, err))
+		st.StartFailAlerted = true
+		state.Instances[icfg.InstanceID] = *st
 	}
 }
 

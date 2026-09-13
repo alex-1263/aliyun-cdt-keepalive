@@ -102,6 +102,7 @@ sudo systemctl enable --now aliyun-keepalive.timer aliyun-report.timer
 | `-state` | 状态文件路径（记录止损标记，防止重复动作） |
 | `-dry-run` | 只打印动作不执行 |
 | `-report` | 发送每日报表 |
+| `-probe <实例ID>` | 探测实例 ID 所在地域（不记得实例建在哪个 region 时用） |
 
 ## 通知策略
 
@@ -110,9 +111,19 @@ sudo systemctl enable --now aliyun-keepalive.timer aliyun-report.timer
 - 实例被外部停止 → 开机 + 推送 🔄 保活通知
 - 每日 09:00 → 推送 📊 流量/状态/余额日报
 
-## 安全建议
+## 常见错误排查
 
-- AK 使用 RAM 子账号**最小权限**（见上），泄露上限仅为“开关这一台实例”
+| 错误 | 原因 | 解决 |
+|---|---|---|
+| `API错误 NoPermission` | RAM 策略缺少 CDT 权限 | 添加 `cdt:ListCdtInternetTraffic`（Resource 只能 `*`） |
+| `Forbidden.RAM`（调 DescribeInstances） | 列表型 API 不支持按单个实例 ID 限权，或策略未授权给 AK 所属用户 | Describe 类动作 Resource 用 `acs:ecs:*:*:instance/*`；并确认策略已授权到 AK 所属 RAM 用户 |
+| `InvalidInstanceId.NotFound` | 实例 ID 或地域不对。注意 `d-` 开头是**云盘** ID，实例 ID 是 **`i-` 开头** | 用 `-probe <实例ID>` 全地域扫描定位 |
+| 飞书收不到消息 | webhook 失效或被群机器人安全设置拦截 | 重新生成 webhook；检查群里机器人是否被移除 |
+
+> ⚠️ 提醒：ECS 控制台里 **`d-` 开头是云盘、`i-` 开头才是实例**，别复制错。
+
+## 说明
+
 - `config.json` 权限 600，不入 git（`.gitignore` 已覆盖）
 - 同时在阿里云费用中心设置「预算告警」作为最后防线
 
