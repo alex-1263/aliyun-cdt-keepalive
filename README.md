@@ -2,6 +2,14 @@
 
 阿里云 CDT 流量监控 + 抢占式实例保活工具（Go 单二进制实现）。
 
+> 本项目方案参考/受启发于以下开源项目与社区帖子，感谢原作者：
+>
+> - [iliyian/aliyun-spot-manager](https://github.com/iliyian/aliyun-spot-manager) —— 抢占式实例保活与状态管理思路
+> - [wang4386/CDT-Monitor](https://github.com/wang4386/CDT-Monitor) —— CDT 流量监控与超限止损思路
+> - [NodeSeek：抢占式ECS实例 CDT 费用分享&TG通知脚本&保活脚本增强版](https://www.nodeseek.com/post-582987-1) / [整了3台阿里云HK CDT 200G](https://www.nodeseek.com/post-764223-2) —— 玩法来源
+>
+> **为什么用 Go 重构**：原脚本多为 Python/Shell 实现，常驻运行需解释器与依赖环境（pip/venv），内存占用 30~60MB 起步；本工具编译为**单静态二进制**（交叉编译一行命令），部署零依赖、常驻内存 ~10MB，签名（RPC V1/HMAC-SHA1）自行实现无第三方库，配合 systemd timer 以"跑完即退"的方式工作，对小规格机器（如 2G 内存的抢占实例/低配 VPS）更友好。
+
 > 适用场景：阿里云（国内/国际站）抢占式实例 + CDT 免费流量玩法。监控每月 CDT 出向流量，超限自动关机止损，月度重置/抢占回收后自动开机保活，全程飞书通知。
 
 ## 功能
@@ -107,9 +115,8 @@ sudo systemctl enable --now aliyun-keepalive.timer aliyun-report.timer
 ## 通知策略
 
 - 流量超限 → 关机 + 推送 🚨 告警
-- 月度重置 → 开机 + 推送 ✅ 恢复通知
 - 实例被外部停止 → 开机 + 推送 🔄 保活通知
-- 每日 09:00 → 推送 📊 流量/状态/余额日报
+- **开机失败连击告警**：连续 3 次（约 15 分钟）开机失败 → 推送 ⚠️ 告警一次（同 episode 不重复），成功后自动清零。背景：实例为**节省停机**时，EIP 配置费（香港 0.04 元/时）持续计费，开机持续失败需人工介入
 
 ## 常见错误排查
 
@@ -118,10 +125,10 @@ sudo systemctl enable --now aliyun-keepalive.timer aliyun-report.timer
 | `API错误 NoPermission` | RAM 策略缺少 CDT 权限 | 添加 `cdt:ListCdtInternetTraffic`（Resource 只能 `*`） |
 | `Forbidden.RAM`（调 DescribeInstances） | 列表型 API 不支持按单个实例 ID 限权，或策略未授权给 AK 所属用户 | Describe 类动作 Resource 用 `acs:ecs:*:*:instance/*`；并确认策略已授权到 AK 所属 RAM 用户 |
 | `InvalidInstanceId.NotFound` | 实例 ID 或地域不对。注意 `d-` 开头是**云盘** ID，实例 ID 是 **`i-` 开头** | 用 `-probe <实例ID>` 全地域扫描定位 |
+| 定时任务从未成功执行（journalctl 报 `No such file or directory` + `status=203/EXEC`） | service 文件 `ExecStart` 路径与二进制实际安装路径不一致（实测踩坑：装在 `/usr/local/bin/` 但 unit 写的 `/opt/aliyun-keepalive/`） | 修正 ExecStart 路径后 `daemon-reload`；`systemctl list-timers` 确认触发时间在推进 |
 | 飞书收不到消息 | webhook 失效或被群机器人安全设置拦截 | 重新生成 webhook；检查群里机器人是否被移除 |
-
-> ⚠️ 提醒：ECS 控制台里 **`d-` 开头是云盘、`i-` 开头才是实例**，别复制错。
-
+ 
+ > ⚠️ 提醒：ECS 控制台里 **`d-` 开头是云盘、`i-` 开头才是实例**，别复制错。
 ## 说明
 
 - `config.json` 权限 600，不入 git（`.gitignore` 已覆盖）
